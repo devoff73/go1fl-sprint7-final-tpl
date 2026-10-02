@@ -58,9 +58,9 @@ func TestCafeCount(t *testing.T) {
 	totalTula := len(cafeList["tula"])
 
 	requests := []struct {
-		count int    // передаваемое значение count
-		want  int    // ожидаемое количество кафе в ответе
-		city  string // город для запроса
+		count int
+		want  int
+		city  string
 	}{
 		{count: 0, want: 0, city: "moscow"},
 		{count: 1, want: 1, city: "moscow"},
@@ -71,17 +71,22 @@ func TestCafeCount(t *testing.T) {
 
 	for _, v := range requests {
 		response := httptest.NewRecorder()
-		req := httptest.NewRequest("GET",
-			"/cafe?city="+v.city+"&count="+strconv.Itoa(v.count), nil)
+		req := httptest.NewRequest(
+			"GET",
+			"/cafe?city="+v.city+"&count="+strconv.Itoa(v.count),
+			nil,
+		)
 
 		handler.ServeHTTP(response, req)
 
-		// запрос должен обработаться успешно — это проверяем через require
+		// Сначала убеждаемся, что запрос обработан успешно
 		require.Equal(t, http.StatusOK, response.Code)
 
-		body := response.Body.String()
+		body := strings.TrimSpace(response.Body.String())
+
 		var got int
 		if body == "" {
+			// Пустой ответ — значит 0 кафе (Split("") даёт [""], а это не то, что нам нужно)
 			got = 0
 		} else {
 			got = len(strings.Split(body, ","))
@@ -95,8 +100,8 @@ func TestCafeSearch(t *testing.T) {
 	handler := http.HandlerFunc(mainHandle)
 
 	requests := []struct {
-		search    string // передаваемое значение search
-		wantCount int    // ожидаемое количество кафе в ответе
+		search    string
+		wantCount int
 	}{
 		{search: "фасоль", wantCount: 0},
 		{search: "кофе", wantCount: 2},
@@ -105,15 +110,18 @@ func TestCafeSearch(t *testing.T) {
 
 	for _, v := range requests {
 		response := httptest.NewRecorder()
-		req := httptest.NewRequest("GET",
-			"/cafe?city=moscow&search="+v.search, nil)
+		req := httptest.NewRequest(
+			"GET",
+			"/cafe?city=moscow&search="+v.search,
+			nil,
+		)
 
 		handler.ServeHTTP(response, req)
 
-		// запрос должен обработаться успешно — это проверяем через require
 		require.Equal(t, http.StatusOK, response.Code)
 
-		body := response.Body.String()
+		body := strings.TrimSpace(response.Body.String())
+
 		if body == "" {
 			assert.Equal(t, 0, v.wantCount)
 			continue
@@ -122,11 +130,18 @@ func TestCafeSearch(t *testing.T) {
 		cafes := strings.Split(body, ",")
 		assert.Equal(t, v.wantCount, len(cafes))
 
-		// каждое найденное кафе должно содержать подстроку поиска
 		for _, cafe := range cafes {
-			assert.True(t,
-				strings.Contains(strings.ToLower(cafe), strings.ToLower(v.search)),
-				"кафе %q не содержит подстроку %q", cafe, v.search)
+			ok := strings.Contains(
+				strings.ToLower(cafe),
+				strings.ToLower(v.search),
+			)
+			assert.True(
+				t,
+				ok,
+				"кафе %q должно содержать подстроку %q",
+				cafe,
+				v.search,
+			)
 		}
 	}
 }
