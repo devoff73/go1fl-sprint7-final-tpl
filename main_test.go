@@ -3,10 +3,12 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCafeNegative(t *testing.T) {
@@ -46,5 +48,100 @@ func TestCafeWhenOk(t *testing.T) {
 		handler.ServeHTTP(response, req)
 
 		assert.Equal(t, http.StatusOK, response.Code)
+	}
+}
+
+func TestCafeCount(t *testing.T) {
+	handler := http.HandlerFunc(mainHandle)
+
+	totalMoscow := len(cafeList["moscow"])
+	totalTula := len(cafeList["tula"])
+
+	requests := []struct {
+		count int
+		want  int
+		city  string
+	}{
+		{count: 0, want: 0, city: "moscow"},
+		{count: 1, want: 1, city: "moscow"},
+		{count: 2, want: 2, city: "tula"},
+		{count: 100, want: totalMoscow, city: "moscow"},
+		{count: 100, want: totalTula, city: "tula"},
+	}
+
+	for _, v := range requests {
+		response := httptest.NewRecorder()
+		req := httptest.NewRequest(
+			"GET",
+			"/cafe?city="+v.city+"&count="+strconv.Itoa(v.count),
+			nil,
+		)
+
+		handler.ServeHTTP(response, req)
+
+		// Сначала убеждаемся, что запрос обработан успешно
+		require.Equal(t, http.StatusOK, response.Code)
+
+		body := strings.TrimSpace(response.Body.String())
+
+		var got int
+		if body == "" {
+			// Пустой ответ — значит 0 кафе (Split("") даёт [""], а это не то, что нам нужно)
+			got = 0
+		} else {
+			got = len(strings.Split(body, ","))
+		}
+
+		assert.Equal(t, v.want, got)
+	}
+}
+
+func TestCafeSearch(t *testing.T) {
+	handler := http.HandlerFunc(mainHandle)
+
+	requests := []struct {
+		search    string
+		wantCount int
+	}{
+		{search: "фасоль", wantCount: 0},
+		{search: "кофе", wantCount: 2},
+		{search: "вилка", wantCount: 1},
+	}
+
+	for _, v := range requests {
+		response := httptest.NewRecorder()
+		req := httptest.NewRequest(
+			"GET",
+			"/cafe?city=moscow&search="+v.search,
+			nil,
+		)
+
+		handler.ServeHTTP(response, req)
+
+		require.Equal(t, http.StatusOK, response.Code)
+
+		body := strings.TrimSpace(response.Body.String())
+
+		if body == "" {
+			assert.Equal(t, 0, v.wantCount)
+			continue
+		}
+
+		cafes := strings.Split(body, ",")
+		assert.Equal(t, v.wantCount, len(cafes))
+
+		for _, cafe := range cafes {
+			ok := strings.Contains(
+				strings.ToLower(cafe),
+				strings.ToLower(v.search),
+			)
+			assert.True(
+				t,
+				ok,
+				"кафе %q должно содержать подстроку %q",
+				cafe,
+				v.search,
+			)
+		}
 	}
 }
